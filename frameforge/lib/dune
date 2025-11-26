@@ -1,2 +1,3 @@
 (library
- (name frameforge))
+ (name frameforge)
+ (libraries unix))
