@@ -1,7 +1,6 @@
 default: build
 
 build: build_frameforge build_ethproxy
-run: run_frameforge run_ethproxy
 
 [working-directory: 'frameforge']
 @build_frameforge:
@@ -22,3 +21,10 @@ run: run_frameforge run_ethproxy
 @run_ethproxy:
     echo 'Running ethproxy'
     go run .
+
+@run: build
+    echo 'Starting frameforge server...'
+    ./frameforge/_build/default/bin/main.exe &
+    sleep 1 # Give server time to start
+    echo 'Starting ethproxy client...'
+    ./ethproxy/ethproxy

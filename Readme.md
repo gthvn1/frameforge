@@ -17,16 +17,8 @@ together with a Go client handling low-level packet I/O.**
 
 ## Usage
 
-1. Start the OCaml server:
-
-```bash
-just run_frameforge
-```
-
-2. Start the Go low-level handler:
-
-```bash
-just run_ethproxy
-```
-
-3. `ethproxy` forwards raw Ethernet frames to `frameforge`, which decodes and optionally replies.
+- To build it: `just build`
+- To run the project: `just run`
+- To run the OCaml server frameforge: `just run_frameforge`
+- To run the Go client ethproxy: `just run_ethproxy`
+- All recipes: `just --list`
