@@ -1,0 +1,4 @@
+(executable
+ (public_name frameforge)
+ (name main)
+ (libraries frameforge))
