@@ -11,8 +11,9 @@ together with a Go client handling low-level packet I/O.**
 ## TODO / Next Steps
 
 * [x] Exchange data between `frameforge` and `ethproxy`
-  - [x] create the frameforge server: can be tested using `echo "ping" | nc -U /tmp/frameforge.socket `
-  - [x] create the ethproxy clien
+  - [x] create the frameforge server:
+    - can be tested using `echo "ping" | nc -U /tmp/frameforge.socket`
+  - [x] create the ethproxy client
 * [ ] ...
 
 ## Usage
