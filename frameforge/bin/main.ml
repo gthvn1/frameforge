@@ -1,6 +1,5 @@
 let () =
   let open Unix in
-  (* Remove old socket *)
   let socket_path = "/tmp/frameforge.socket" in
 
   (* Start by removing the old socket, ignore errors *)
@@ -8,9 +7,9 @@ let () =
 
   let sock = socket PF_UNIX SOCK_STREAM 0 in
   bind sock (ADDR_UNIX socket_path) ;
+  (* just allow one connection for now *)
   listen sock 1 ;
 
-  (* just allow one connection for now *)
   Printf.printf "FrameForge listening on %s\n%!" socket_path ;
 
   let fd, _ = accept sock in
