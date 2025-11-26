@@ -10,9 +10,10 @@ together with a Go client handling low-level packet I/O.**
 
 ## TODO / Next Steps
 
-* [ ] Exchange data between `frameforge` and `ethproxy`
+* [x] Exchange data between `frameforge` and `ethproxy`
   - [x] create the frameforge server: can be tested using `echo "ping" | nc -U /tmp/frameforge.socket `
-  - [ ] create the ethproxy clien
+  - [x] create the ethproxy clien
+* [ ] ...
 
 ## Usage
 
