@@ -1,12 +1,12 @@
 # FrameForge
 
 **A functional OCaml server that decodes and responds to Ethernet frames, working
-together with a Go client handling low-level packet I/O.**
+together with a Zig client handling low-level packet I/O.**
 
 ## Overview
 
 * `frameforge` (OCaml): decodes Ethernet frames, applies logic, crafts replies.
-* `ethproxy` (Go): handles raw network sockets, forwards frames to `frameforge` via UNIX socket.
+* `ethproxy` (Zig): handles raw network sockets, forwards frames to `frameforge` via UNIX socket.
 
 ## TODO / Next Steps
 
@@ -18,7 +18,7 @@ together with a Go client handling low-level packet I/O.**
 
 ## Usage
 
-- To build the project: `make build`
-- To run it: `make run`
-- To run the OCaml server frameforge: `make run_frameforge`
-- To run the Go client ethproxy: `make run_ethproxy`
+- To build the project: `zig build`
+- To run it: `zig build run`
+- To run the OCaml server frameforge: `./frameforge/_build/default/bin/main.exe`
+- To run the Zig client ethproxy: `./zig-out/bin/ethproxy`
