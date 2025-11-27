@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "zclient",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("zig_client/client.zig"),
+            .root_source_file = b.path("ethproxy/client.zig"),
             .target = b.standardTargetOptions(.{}),
             .optimize = b.standardOptimizeOption(.{}),
         }),
