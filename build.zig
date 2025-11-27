@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
 
     // ---- Build Zig client
     const exe = b.addExecutable(.{
@@ -19,6 +19,10 @@ pub fn build(b: *std.Build) void {
     const cmd = b.addSystemCommand(&.{ "dune", "build" });
     cmd.cwd = b.path("frameforge");
 
+    try dune_build.addWatchInput(b.path("frameforge/bin/main.ml"));
+    try dune_build.addWatchInput(b.path("frameforge/lib/server.ml"));
+    try dune_build.addWatchInput(b.path("frameforge/lib/server.mli"));
+
     dune_build.dependOn(&cmd.step);
     // Add it in default target
     b.default_step.dependOn(dune_build);
@@ -29,6 +33,9 @@ pub fn build(b: *std.Build) void {
     //   - wait that socket /tmp/frameforge.socket is ready
     //   - start the client
     const run_step = b.step("run", "Run frameforge and zclient");
+
+    run_step.dependOn(&exe.step);
+    run_step.dependOn(dune_build);
 
     // start frameforge in the background and wait for socket to be ready
     const server = b.addSystemCommand(&.{
