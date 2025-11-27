@@ -36,7 +36,7 @@ pub fn main() !void {
     _ = try posix.send(sock, msg, 0);
 
     // And wait for the response...
-    var buf: [32]u8 = undefined;
+    var buf: [64]u8 = undefined;
     const n = try posix.recv(sock, &buf, 0);
 
     if (n < 4) {
@@ -48,6 +48,6 @@ pub fn main() !void {
     const data_len: u32 =
         @as(u32, buf[0]) | @as(u32, buf[1]) << 8 | @as(u32, buf[2]) << 16 | @as(u32, buf[3]) << 24;
 
-    std.debug.print("Received {d} bytes: {s}\n", .{ n, buf[0..n] });
-    std.debug.print("message size: {d}\n", .{data_len});
+    std.debug.print("ETHPROXY: Data size: {d} \n", .{data_len});
+    std.debug.print("ETHPROXY: Payload  : {s}\n", .{buf[4 .. 4 + data_len]});
 }
