@@ -19,10 +19,35 @@ pub fn main() !void {
     defer posix.close(sock);
 
     // Now we can send the ping
-    _ = try posix.send(sock, "ping", 0);
+    // We are using a simple protocol where we send the size of the data
+    // and then the data.
 
-    // And wait for the pong...
+    const msg = "ping";
+
+    // We use an array of 4 bytes to be sure that it will be send using
+    // the correct format.
+    var header: [4]u8 = undefined; // will contain the size of the msg
+    header[0] = msg.len & 0xff;
+    header[1] = (msg.len >> 8) & 0xff;
+    header[2] = (msg.len >> 16) & 0xff;
+    header[3] = (msg.len >> 24) & 0xff;
+
+    _ = try posix.send(sock, &header, 0);
+    _ = try posix.send(sock, msg, 0);
+
+    // And wait for the response...
     var buf: [32]u8 = undefined;
     const n = try posix.recv(sock, &buf, 0);
-    std.debug.print("Received {d} bytes: {s}", .{ n, buf[0..n] });
+
+    if (n < 4) {
+        std.debug.print("We should at least received 4 bytes, received {d}\n", .{n});
+        return;
+    }
+
+    // The first four bytes are the size and then the data
+    const data_len: u32 =
+        @as(u32, buf[0]) | @as(u32, buf[1]) << 8 | @as(u32, buf[2]) << 16 | @as(u32, buf[3]) << 24;
+
+    std.debug.print("Received {d} bytes: {s}\n", .{ n, buf[0..n] });
+    std.debug.print("message size: {d}\n", .{data_len});
 }
