@@ -11,4 +11,12 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(exe);
+
+    const dune_build = b.step("dune", "Build Ocaml project using dune");
+    const cmd = b.addSystemCommand(&.{ "dune", "build" });
+    cmd.cwd = b.path("frameforge");
+
+    dune_build.dependOn(&cmd.step);
+    // Add it in default target
+    b.default_step.dependOn(dune_build);
 }
