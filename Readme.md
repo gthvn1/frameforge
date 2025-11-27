@@ -18,8 +18,7 @@ together with a Go client handling low-level packet I/O.**
 
 ## Usage
 
-- To build it: `just build`
-- To run the project: `just run`
-- To run the OCaml server frameforge: `just run_frameforge`
-- To run the Go client ethproxy: `just run_ethproxy`
-- All recipes: `just --list`
+- To build the project: `make build`
+- To run it: `make run`
+- To run the OCaml server frameforge: `make run_frameforge`
+- To run the Go client ethproxy: `make run_ethproxy`
