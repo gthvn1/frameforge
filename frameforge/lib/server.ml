@@ -29,7 +29,6 @@ let ping_pong ?(is_test = false) socket_path =
   bind sock (ADDR_UNIX socket_path) ;
   (* just allow one connection for now *)
   listen sock 1 ;
-
   Printf.printf "FrameForge listening on %s\n%!" socket_path ;
 
   let rec loop () =
@@ -44,7 +43,6 @@ let ping_pong ?(is_test = false) socket_path =
     (* Now we can read the rest of the message *)
     let payload = Bytes.create data_size in
     let _ = read fd payload 0 data_size in
-
     Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
 
     (* Now we can reply *)
