@@ -16,7 +16,11 @@ let encode_header size : bytes =
   set header 3 (Char.chr ((size lsr 24) land 0xff)) ;
   header
 
-let ping_pong socket_path =
+(** [ping_pong is_test socket_path] is a simple ping pong server.
+    [is_test] is used when we want to accept one connection and then quit.
+    It is useful for testing. If set to false it will answer forever and
+    can be closed using Ctrl-C. *)
+let ping_pong ?(is_test = false) socket_path =
   let open Unix in
   (* Start by removing the old socket, ignore errors *)
   (try Unix.unlink socket_path with _ -> ()) ;
@@ -28,28 +32,33 @@ let ping_pong socket_path =
 
   Printf.printf "FrameForge listening on %s\n%!" socket_path ;
 
-  let fd, _ = accept sock in
+  let rec loop () =
+    let fd, _ = accept sock in
 
-  (* Read the first 4 bytes first to get the size *)
-  let header = Bytes.create 4 in
-  let _ = read fd header 0 4 in
-  let data_size = decode_header header in
-  Printf.printf "FRAMEFORGE: Data size: %d\n" data_size ;
+    (* Read the first 4 bytes first to get the size *)
+    let header = Bytes.create 4 in
+    let _ = read fd header 0 4 in
+    let data_size = decode_header header in
+    Printf.printf "FRAMEFORGE: Data size: %d\n" data_size ;
 
-  (* Now we can read the rest of the message *)
-  let payload = Bytes.create data_size in
-  let _ = read fd payload 0 data_size in
+    (* Now we can read the rest of the message *)
+    let payload = Bytes.create data_size in
+    let _ = read fd payload 0 data_size in
 
-  Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
+    Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
 
-  (* Now we can reply *)
-  let msg = "pong" in
-  let msg_size = String.length msg in
-  let header = encode_header msg_size in
-  ignore @@ write fd header 0 4 ;
-  ignore @@ write fd (Bytes.of_string msg) 0 msg_size ;
+    (* Now we can reply *)
+    let msg = "pong" in
+    let msg_size = String.length msg in
+    let header = encode_header msg_size in
+    ignore @@ write fd header 0 4 ;
+    ignore @@ write fd (Bytes.of_string msg) 0 msg_size ;
+    flush Out_channel.stdout ;
+    close fd ;
+    if not is_test then loop ()
+  in
 
-  close fd ;
+  loop () ;
   close sock ;
 
   Printf.printf "Connection closed\n%!"
