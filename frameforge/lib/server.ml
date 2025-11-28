@@ -21,6 +21,9 @@ let encode_header size : bytes =
     It is useful for testing. If set to false it will answer forever and
     can be closed using Ctrl-C. *)
 let ping_pong ?(is_test = false) socket_path =
+  (* Add the signal handler to cleanly shutdown the server *)
+  let () = Sys.(set_signal sigint (Signal_handle (fun _ -> ()))) in
+
   let open Unix in
   (* Start by removing the old socket, ignore errors *)
   (try Unix.unlink socket_path with _ -> ()) ;
@@ -32,31 +35,40 @@ let ping_pong ?(is_test = false) socket_path =
   Printf.printf "FrameForge listening on %s\n%!" socket_path ;
 
   let rec loop () =
-    let fd, _ = accept sock in
+    try
+      let fd, _ = accept sock in
 
-    (* Read the first 4 bytes first to get the size *)
-    let header = Bytes.create 4 in
-    let _ = read fd header 0 4 in
-    let data_size = decode_header header in
-    Printf.printf "FRAMEFORGE: Data size: %d\n" data_size ;
+      (* Read the first 4 bytes first to get the size *)
+      let header = Bytes.create 4 in
+      let _ = read fd header 0 4 in
+      let data_size = decode_header header in
+      Printf.printf "FRAMEFORGE: Data size: %d\n" data_size ;
 
-    (* Now we can read the rest of the message *)
-    let payload = Bytes.create data_size in
-    let _ = read fd payload 0 data_size in
-    Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
+      (* Now we can read the rest of the message *)
+      let payload = Bytes.create data_size in
+      let _ = read fd payload 0 data_size in
+      Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
 
-    (* Now we can reply *)
-    let msg = "pong" in
-    let msg_size = String.length msg in
-    let header = encode_header msg_size in
-    ignore @@ write fd header 0 4 ;
-    ignore @@ write fd (Bytes.of_string msg) 0 msg_size ;
-    flush Out_channel.stdout ;
-    close fd ;
-    if not is_test then loop ()
+      (* Now we can reply *)
+      let msg = "pong" in
+      let msg_size = String.length msg in
+      let header = encode_header msg_size in
+      ignore @@ write fd header 0 4 ;
+      ignore @@ write fd (Bytes.of_string msg) 0 msg_size ;
+      flush Out_channel.stdout ;
+      close fd ;
+
+      if not is_test then loop ()
+    with
+    | Unix_error (EINTR, _, _) ->
+        (* The handler does nothing but allow us to reach this point that is why it is required.
+           Without the signal handler we just quit directly.*)
+        print_endline "Server ends cleanly"
+    | exn ->
+        Printf.printf "Got error: %s\n%!" (Printexc.to_string exn)
   in
 
   loop () ;
-  close sock ;
 
+  close sock ;
   Printf.printf "Connection closed\n%!"
