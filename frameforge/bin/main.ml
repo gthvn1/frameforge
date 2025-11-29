@@ -1,4 +1,9 @@
-(* TODO: use args to set test or not *)
 let () =
-  let is_test = Array.mem  "--test" Sys.argv in
-  Frameforge.Server.ping_pong ~is_test "/tmp/frameforge.socket"
+  let open Frameforge in
+  let run_once = Array.mem "--once" Sys.argv in
+  (* Currently only pong is available but later we will have another one *)
+  let handler =
+    if Array.mem "--pong" Sys.argv then Server.pong else Server.ethframe
+  in
+
+  Server.run ~run_once "/tmp/frameforge.socket" handler
