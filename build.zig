@@ -41,7 +41,7 @@ pub fn build(b: *std.Build) !void {
     const server = b.addSystemCommand(&.{
         "sh",
         "-c",
-        \\ ./frameforge/_build/default/bin/main.exe --test &
+        \\ ./frameforge/_build/default/bin/main.exe --test --pong &
         \\ echo "Waiting for server to be ready"
         \\ for i in $(seq 1 50); do
         \\   [ -S /tmp/frameforge.socket ] && exit 0

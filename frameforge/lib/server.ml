@@ -18,9 +18,7 @@ let encode_header size : bytes =
   set header 3 (Char.chr ((size lsr 24) land 0xff)) ;
   header
 
-let pong (_ : bytes) : bytes = Bytes.of_string "pong"
 
-let ethframe (_ : bytes) : bytes = Bytes.of_string "TODO: parse ethernet frame"
 
 let run ?(run_once = false) socket_path (handler : handler) =
   (* Add the signal handler to cleanly shutdown the server *)
