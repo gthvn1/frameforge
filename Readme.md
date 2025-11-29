@@ -14,7 +14,8 @@ together with a Zig client handling low-level packet I/O.**
   - [x] create the frameforge server:
     - can be tested using `echo "ping" | nc -U /tmp/frameforge.socket`
   - [x] create the ethproxy client
-* [ ] ...
+* [ ] Parse Ethernet Frame
+* [ ] ...
 
 ## Usage
 
