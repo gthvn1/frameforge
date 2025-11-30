@@ -32,9 +32,38 @@ pub fn usage(prog: []const u8) void {
     );
 }
 
+fn checkCidr(s: [:0]const u8) bool {
+    var parts_iter = std.mem.splitScalar(u8, s, '/');
+    // Read the first part the should be an IPv4
+    const ipv4 = parts_iter.next() orelse return false;
+    const prefix = parts_iter.next() orelse return false;
+    // We don't expect anything else
+    if (parts_iter.next() != null) return false;
+
+    // Check IP
+    _ = std.net.Ip4Address.parse(ipv4, 1234) catch return false;
+
+    // Prefix is valid from 0 to 32
+    const p = std.fmt.parseInt(u8, prefix, 10) catch return false;
+    return p <= 32;
+}
+
+const ArgType = enum {
+    Veth,
+    Cidr,
+    Unknown,
+
+    // Lookup table for args
+    fn lookup(arg: []const u8) ArgType {
+        if (std.mem.eql(u8, arg, "--veth")) return .Veth;
+        if (std.mem.eql(u8, arg, "--cidr")) return .Cidr;
+        return .Unknown;
+    }
+};
+
 pub const Params = struct {
-    veth_name: []const u8,
-    cidr: []const u8,
+    veth_name: [:0]const u8,
+    cidr: [:0]const u8,
 
     pub const Error = error{
         InvalidCIDR,
@@ -43,9 +72,25 @@ pub const Params = struct {
     };
 
     pub fn parse(params: *std.process.ArgIterator) Params.Error!Params {
+        var veth_name: ?[:0]const u8 = null;
+        var cidr: ?[:0]const u8 = null;
+
         while (params.next()) |p| {
-            std.debug.print("Argument: {s}\n", .{p});
+            switch (ArgType.lookup(p)) {
+                .Veth => veth_name = params.next() orelse return Error.MissingVethName,
+                .Cidr => cidr = params.next() orelse return Error.MissingCIDR,
+                .Unknown => std.debug.print("skipping {s}\n", .{p}),
+            }
         }
-        return error.MissingVethName;
+
+        if (veth_name == null) return Error.MissingVethName;
+        if (cidr == null) return Error.MissingCIDR;
+
+        if (checkCidr(cidr.?) == false) return Error.InvalidCIDR;
+
+        return .{
+            .veth_name = veth_name.?,
+            .cidr = cidr.?,
+        };
     }
 };

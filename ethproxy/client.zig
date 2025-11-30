@@ -22,7 +22,9 @@ pub fn main() !void {
         return;
     };
 
-    _ = client_args;
+    // Print that we have all parameters
+    std.debug.print("vethname is {s}\n", .{client_args.veth_name});
+    std.debug.print("cidr is {s}\n", .{client_args.cidr});
 
     simple_ping_client() catch |err| {
         std.debug.print("Failed to run ping client: {}\n", .{err});
