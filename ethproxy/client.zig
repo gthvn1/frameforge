@@ -5,44 +5,24 @@ const params = @import("params.zig");
 const Params = params.Params;
 
 pub fn main() !void {
-
-    // Get all params and parse them
     var args_iter = std.process.args();
 
     // First parameter is the name of the program
-    const progname = args_iter.next() orelse "ethproxy";
+    // It is not expected to not have it...
+    const progname = args_iter.next() orelse unreachable();
 
-    // Now we need to construct a list with the rest of parameters
-    const GpaType = std.heap.GeneralPurposeAllocator(.{});
-    var gpa = GpaType{};
-    const allocator = gpa.allocator();
-    defer (std.debug.assert(gpa.deinit() == std.heap.Check.ok));
-
-    const arrayType = std.ArrayList([]const u8); // We want a list of strings
-
-    var params_list = arrayType.empty;
-    defer params_list.deinit(allocator);
-
-    while (args_iter.next()) |arg| {
-        try params_list.append(allocator, arg);
-    }
-
-    _ = Params.parse(params_list) catch |err| {
+    const client_args = Params.parse(&args_iter) catch |err| {
         switch (err) {
-            Params.Error.InvalidCIDR => {
-                std.debug.print("Invalid CIDR\n", .{});
-            },
-            Params.Error.MissingCIDR => {
-                std.debug.print("CIDR is missing\n", .{});
-            },
-            Params.Error.MissingVethName => {
-                std.debug.print("Veth name is missing\n", .{});
-            },
+            Params.Error.InvalidCIDR => std.debug.print("Invalid CIDR\n", .{}),
+            Params.Error.MissingCIDR => std.debug.print("CIDR is missing\n", .{}),
+            Params.Error.MissingVethName => std.debug.print("Veth name is missing\n", .{}),
         }
 
         params.usage(progname);
         return;
     };
+
+    _ = client_args;
 
     simple_ping_client() catch |err| {
         std.debug.print("Failed to run ping client: {}\n", .{err});

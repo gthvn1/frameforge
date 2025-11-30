@@ -42,8 +42,8 @@ pub const Params = struct {
         MissingVethName,
     };
 
-    pub fn parse(params: std.ArrayList([]const u8)) Params.Error!Params {
-        for (params.items) |p| {
+    pub fn parse(params: *std.process.ArgIterator) Params.Error!Params {
+        while (params.next()) |p| {
             std.debug.print("Argument: {s}\n", .{p});
         }
         return error.MissingVethName;
