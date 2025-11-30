@@ -4,7 +4,13 @@ const posix = std.posix;
 const params = @import("params.zig");
 const Params = params.Params;
 
+const Veth = @import("setup.zig").Veth;
+
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.debug.assert(gpa.deinit() == .ok);
+    const allocator = gpa.allocator();
+
     var args_iter = std.process.args();
 
     // First parameter is the name of the program
@@ -25,6 +31,19 @@ pub fn main() !void {
     // Print that we have all parameters
     std.debug.print("vethname is {s}\n", .{client_args.veth_name});
     std.debug.print("cidr is {s}\n", .{client_args.cidr});
+
+    // We can now setup the network
+    var veth = Veth.create(allocator, client_args.veth_name) catch |err| {
+        std.debug.print("Unexpected error when creating veth: {}\n", .{err});
+        return;
+    };
+    defer veth.destroy();
+
+    // Check the error code
+    if (veth.code != 0) {
+        std.debug.print("Failed to create veth pair: {s}\n", .{veth.stderr.items});
+        return;
+    }
 
     simple_ping_client() catch |err| {
         std.debug.print("Failed to run ping client: {}\n", .{err});
