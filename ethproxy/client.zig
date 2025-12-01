@@ -33,14 +33,14 @@ pub fn main() !void {
     std.debug.print("cidr is {s}\n", .{client_args.cidr});
 
     // We can now setup the network
-    var veth = Veth.create(allocator, client_args.veth_name) catch |err| {
+    var veth = Veth.create(allocator, client_args.veth_name, client_args.cidr) catch |err| {
         std.debug.print("Unexpected error when creating veth: {}\n", .{err});
         return;
     };
     defer veth.destroy();
 
     // Check the error code
-    if (veth.code != 0) {
+    if (veth.exit_code != 0) {
         std.debug.print("Failed to create veth pair: {s}\n", .{veth.stderr.items});
         return;
     }
