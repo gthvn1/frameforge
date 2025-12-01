@@ -25,17 +25,17 @@ pub const Veth = struct {
         var stdout: std.ArrayListUnmanaged(u8) = .empty;
         var stderr: std.ArrayListUnmanaged(u8) = .empty;
 
-        const cmds = [_][]const []const u8{
-            &[_][]const u8{ "ip", "link", "show", veth_name },
-            &[_][]const u8{ "ip", "link", "add", veth_name, "type", "veth", "peer", "name", veth_peer },
-            &[_][]const u8{ "ip", "addr", "add", veth_cidr, "dev", veth_name },
-            &[_][]const u8{ "ip", "link", "set", veth_name, "up" },
-            &[_][]const u8{ "ip", "link", "set", veth_peer, "up" },
+        const cmds = .{
+            .{ &[_][]const u8{ "ip", "link", "show", veth_name }, 1 },
+            .{ &[_][]const u8{ "ip", "link", "add", veth_name, "type", "veth", "peer", "name", veth_peer }, 0 },
+            .{ &[_][]const u8{ "ip", "addr", "add", veth_cidr, "dev", veth_name }, 0 },
+            .{ &[_][]const u8{ "ip", "link", "set", veth_name, "up" }, 0 },
+            .{ &[_][]const u8{ "ip", "link", "set", veth_peer, "up" }, 0 },
         };
 
         inline for (cmds) |cmd| {
-            exit_code = try runCmd(cmd, allocator, &stdout, &stderr);
-            if (exit_code != 0) break;
+            exit_code = try runCmd(cmd[0], allocator, &stdout, &stderr);
+            if (exit_code != cmd[1]) break;
         }
 
         return Veth{
@@ -49,7 +49,7 @@ pub const Veth = struct {
     }
 
     pub fn destroy(self: *Veth) void {
-        const cmds = [_][]const []const u8{
+        const cmds = .{
             &[_][]const u8{ "ip", "link", "set", self.name, "down" },
             &[_][]const u8{ "ip", "link", "set", self.peer, "down" },
             &[_][]const u8{ "ip", "link", "del", self.name },
