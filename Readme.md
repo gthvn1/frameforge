@@ -8,14 +8,24 @@ together with a Zig client handling low-level packet I/O.**
 * `frameforge` (OCaml): decodes Ethernet frames, applies logic, crafts replies.
 * `ethproxy` (Zig): handles raw network sockets, forwards frames to `frameforge` via UNIX socket.
 
+## Current status
+
+* `frameforge` is listening on the socket and responds by echoing.
+* `ethproxy` is able to:
+  * Set up the virtual pair.
+  * Wait for user input.
+  * Send the input to `frameforge`
+  * Print the response.
+* See the screenshot for a better idea of the current status.
+
 ## TODO / Next Steps
 
 * [x] Exchange data between `frameforge` and `ethproxy`
-  - [x] create the frameforge server:
-    - can be tested using `echo "ping" | nc -U /tmp/frameforge.socket`
-  - [x] create the ethproxy client
-* [ ] Ethproxy: Setup the network (veth)
-* [ ] Ethproxy: Read an ethernet frame from veth-peer and send it to server
+  - [x] Create the frameforge server:
+    - Can be tested using `echo "ping" | nc -U /tmp/frameforge.socket`
+  - [x] Create the ethproxy client
+* [x] Ethproxy: Setup the network (veth)
+* [ ] Ethproxy: Read an ethernet frame from veth-peer and send it to the server
 * [ ] Frameforge: Parse Ethernet Frame
 * [ ] ...
 
@@ -25,3 +35,5 @@ together with a Zig client handling low-level packet I/O.**
 - To run it: `zig build run`
 - To run the OCaml server frameforge: `./frameforge/_build/default/bin/main.exe`
 - To run the Zig client ethproxy: `./zig-out/bin/ethproxy`
+
+## Screenshot

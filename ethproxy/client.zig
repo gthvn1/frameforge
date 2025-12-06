@@ -45,12 +45,14 @@ pub fn main() !void {
         return;
     }
 
-    simple_ping_client() catch |err| {
-        std.debug.print("Failed to run ping client: {}\n", .{err});
+    // At this point the network should be up and running.
+
+    simple_client() catch |err| {
+        std.debug.print("Failed to run client: {}\n", .{err});
     };
 }
 
-fn simple_ping_client() !void {
+fn simple_client() !void {
     // man 7 unix
     // -> We use AF_UNIX to communicate locally between processes
     const sock = try posix.socket(posix.AF.UNIX, posix.SOCK.STREAM, 0);
@@ -67,20 +69,19 @@ fn simple_ping_client() !void {
     try posix.connect(sock, @ptrCast(&laddr), @sizeOf(posix.sockaddr.un));
     defer posix.close(sock);
 
-    // Now we can send the ping
+    // Ask to the user what to send
+    std.debug.print("> ", .{});
+    var stdin_buffer: [64]u8 = undefined;
+    var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+    const stdin = &stdin_reader.interface;
+    const msg = try stdin.takeDelimiterExclusive('\n');
+
     // We are using a simple protocol where we send the size of the data
     // and then the data.
-
-    const msg = "ping";
-
     // We use an array of 4 bytes to be sure that it will be send using
     // the correct format.
     var header: [4]u8 = undefined; // will contain the size of the msg
-    header[0] = msg.len & 0xff;
-    header[1] = (msg.len >> 8) & 0xff;
-    header[2] = (msg.len >> 16) & 0xff;
-    header[3] = (msg.len >> 24) & 0xff;
-
+    std.mem.writeInt(u32, &header, @intCast(msg.len), .little);
     _ = try posix.send(sock, &header, 0);
     _ = try posix.send(sock, msg, 0);
 
