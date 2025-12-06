@@ -37,3 +37,5 @@ together with a Zig client handling low-level packet I/O.**
 - To run the Zig client ethproxy: `./zig-out/bin/ethproxy`
 
 ## Screenshot
+
+<img src="https://github.com/gthvn1/frameforge/blob/master/screenshot.png">
