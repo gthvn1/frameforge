@@ -98,9 +98,23 @@ fn simpleClient() !void {
     var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
     const stdin = &stdin_reader.interface;
 
+    const timeout_ms: i32 = 200;
+
+    std.debug.print("> ", .{}); // first prompt
+
     loop: while (!quit_loop.load(.acquire)) {
-        // Ask to the user what to send
-        std.debug.print("> ", .{});
+        // Ask to the user what to send. But as we can block we need to poll or timeout
+        // so if the user hit ctrl-c we will be able to catch it. Otherwise we need to wait
+        // that something is entered to catch it.
+        var fds = [_]std.posix.pollfd{.{
+            .fd = std.posix.STDIN_FILENO,
+            .events = posix.POLL.IN,
+            .revents = 0,
+        }};
+
+        const ret = std.posix.poll(&fds, timeout_ms) catch continue :loop;
+        if (ret == 0) continue :loop; // n == 0 means we hit the timeout
+
         const msg = try stdin.takeDelimiterExclusive('\n');
         // consume the '\n'
         _ = try stdin.take(1);
@@ -129,6 +143,8 @@ fn simpleClient() !void {
         const data_len: u32 = std.mem.readInt(u32, buf[0..4], .little);
         std.debug.print("ETHPROXY: Data size: {d} \n", .{data_len});
         std.debug.print("ETHPROXY: Payload  : {s}\n", .{buf[4 .. 4 + data_len]});
+
+        std.debug.print("> ", .{});
     }
 
     std.debug.print("Break out of the loop cleanly\n", .{});
