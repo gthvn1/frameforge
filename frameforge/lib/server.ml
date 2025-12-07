@@ -18,8 +18,6 @@ let encode_header size : bytes =
   set header 3 (Char.chr ((size lsr 24) land 0xff)) ;
   header
 
-
-
 let run ?(run_once = false) socket_path (handler : handler) =
   (* Add the signal handler to cleanly shutdown the server *)
   Sys.(set_signal sigint (Signal_handle (fun _ -> ()))) ;
@@ -34,33 +32,57 @@ let run ?(run_once = false) socket_path (handler : handler) =
   listen sock 1 ;
   Printf.printf "FrameForge listening on %s\n%!" socket_path ;
 
-  let rec loop () =
+  (* Read exactly n bytes or return 0 if client is disconnected *)
+  let rec read_exact fd buf offset len =
+    if len = 0 then
+      1
+    else
+      match read fd buf offset len with
+      | 0 ->
+          0
+      | n ->
+          read_exact fd buf (offset + n) (len - n)
+  in
+
+  (* Handle one connected client until it disconnects *)
+  let rec handle_client fd =
+    (* --- Read the first 4 bytes first to get the size *)
+    let header = Bytes.create 4 in
+    match read_exact fd header 0 4 with
+    | 0 ->
+        Printf.printf "FRAMEFORGE: client disconnected\n%!" ;
+        ()
+    | _ -> (
+        let data_size = decode_header header in
+        Printf.printf "FRAMEFORGE: Data size: %d\n" data_size ;
+        (* --- Read payload *)
+        let payload = Bytes.create data_size in
+        match read_exact fd payload 0 data_size with
+        | 0 ->
+            Printf.printf
+              "FRAMEFORGE: client disconnected before reading payload\n%!" ;
+            ()
+        | _ ->
+            Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
+            (* --- Call the handler *)
+            let response = handler payload in
+
+            (* --- Send response *)
+            let response_size = Bytes.length response in
+            let header = encode_header response_size in
+            ignore @@ write fd header 0 4 ;
+            ignore @@ write fd response 0 response_size ;
+            flush Out_channel.stdout ;
+            handle_client fd
+      )
+  in
+  let rec accept_loop () =
     try
       let fd, _ = accept sock in
-
-      (* --- Read the first 4 bytes first to get the size *)
-      let header = Bytes.create 4 in
-      let _ = read fd header 0 4 in
-      let data_size = decode_header header in
-      Printf.printf "FRAMEFORGE: Data size: %d\n" data_size ;
-
-      (* --- Read payload *)
-      let payload = Bytes.create data_size in
-      let _ = read fd payload 0 data_size in
-      Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
-
-      (* --- Call the handler *)
-      let response = handler payload in
-
-      (* --- Send response *)
-      let response_size = Bytes.length response in
-      let header = encode_header response_size in
-      ignore @@ write fd header 0 4 ;
-      ignore @@ write fd response 0 response_size ;
-      flush Out_channel.stdout ;
+      Printf.printf "Client connected\n%!" ;
+      handle_client fd ;
       close fd ;
-
-      if not run_once then loop ()
+      if not run_once then accept_loop ()
     with
     | Unix_error (EINTR, _, _) ->
         (* The handler does nothing but allow us to reach this point that is why it is required.
@@ -70,7 +92,6 @@ let run ?(run_once = false) socket_path (handler : handler) =
         Printf.printf "Got error: %s\n%!" (Printexc.to_string exn)
   in
 
-  loop () ;
-
+  accept_loop () ;
   close sock ;
   Printf.printf "Connection closed\n%!"
