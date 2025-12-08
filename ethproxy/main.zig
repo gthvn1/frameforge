@@ -33,20 +33,16 @@ pub fn main() !void {
     std.debug.print("cidr is {s}\n", .{client_args.cidr});
 
     // We can now setup the network
-    var veth = Veth.create(allocator, client_args.veth_name, client_args.cidr) catch |err| {
-        std.debug.print("Unexpected error when creating veth: {}\n", .{err});
-        return;
-    };
+    var veth = try Veth.init(allocator, client_args.veth_name);
     defer veth.destroy();
 
-    // Check the error code
-    if (veth.exit_code != 0) {
+    veth.createVeth(client_args.cidr) catch {
         std.debug.print("Failed to create veth pair: {s}\n", .{veth.stderr.items});
         return;
-    }
+    };
 
     // At this point the network should be up and running.
-    simpleClient() catch |err| {
+    simpleClient(&veth) catch |err| {
         std.debug.print("Failed to run client: {}\n", .{err});
     };
 }
@@ -61,7 +57,12 @@ fn handleSigint(sig: c_int) callconv(.c) void {
     quit_loop.store(true, .release);
 }
 
-fn simpleClient() !void {
+fn simpleClient(veth: *Veth) !void {
+    // TODO: Currently veth is not used but we quicly open a socket to the
+    // peer to listen for incoming low level frame instead of waiting for
+    // user input.
+    _ = veth;
+
     // At this point the network should be up and running.
     // We will go to the infinite loop but before we need to
     // setup a signal handler for Sigint to be able to quit properly

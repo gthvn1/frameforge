@@ -11,41 +11,46 @@ pub const Veth = struct {
     name: []const u8,
     peer: []const u8,
 
-    exit_code: u8,
     stdout: std.ArrayListUnmanaged(u8),
     stderr: std.ArrayListUnmanaged(u8),
 
-    pub fn create(allocator: std.mem.Allocator, veth_name: []const u8, veth_cidr: []const u8) !Veth {
+    pub fn init(allocator: std.mem.Allocator, veth_name: []const u8) !Veth {
         const veth_peer = try std.mem.concat(allocator, u8, &.{
             veth_name,
             "-peer",
         });
 
-        var exit_code: u8 = 0;
-        var stdout: std.ArrayListUnmanaged(u8) = .empty;
-        var stderr: std.ArrayListUnmanaged(u8) = .empty;
-
-        const cmds = .{
-            .{ &[_][]const u8{ "ip", "link", "show", veth_name }, 1 },
-            .{ &[_][]const u8{ "ip", "link", "add", veth_name, "type", "veth", "peer", "name", veth_peer }, 0 },
-            .{ &[_][]const u8{ "ip", "addr", "add", veth_cidr, "dev", veth_name }, 0 },
-            .{ &[_][]const u8{ "ip", "link", "set", veth_name, "up" }, 0 },
-            .{ &[_][]const u8{ "ip", "link", "set", veth_peer, "up" }, 0 },
-        };
-
-        inline for (cmds) |cmd| {
-            exit_code = try runCmd(cmd[0], allocator, &stdout, &stderr);
-            if (exit_code != cmd[1]) break;
-        }
-
         return Veth{
             .allocator = allocator,
             .name = veth_name,
             .peer = veth_peer,
-            .stdout = stdout,
-            .stderr = stderr,
-            .exit_code = exit_code,
+            .stdout = .empty,
+            .stderr = .empty,
         };
+    }
+
+    pub fn createVeth(self: *Veth, veth_cidr: []const u8) !void {
+        // Clear buffer even if we excpect them to be empty since createVeth should be the first
+        // function called.
+        self.resetBuffers();
+
+        const cmds = .{
+            .{ &[_][]const u8{ "ip", "link", "show", self.name }, 1 },
+            .{ &[_][]const u8{ "ip", "link", "add", self.name, "type", "veth", "peer", "name", self.peer }, 0 },
+            .{ &[_][]const u8{ "ip", "addr", "add", veth_cidr, "dev", self.name }, 0 },
+            .{ &[_][]const u8{ "ip", "link", "set", self.name, "up" }, 0 },
+            .{ &[_][]const u8{ "ip", "link", "set", self.peer, "up" }, 0 },
+        };
+
+        inline for (cmds) |cmd| {
+            const exit_code = try self.runCmd(cmd[0]);
+            if (exit_code != cmd[1]) return error.CommandFailed;
+        }
+    }
+
+    pub fn getPeerMac(self: *Veth) void {
+        // TODO
+        _ = self;
     }
 
     pub fn destroy(self: *Veth) void {
@@ -56,24 +61,29 @@ pub const Veth = struct {
         };
 
         inline for (cmds) |cmd| {
-            _ = runCmd(cmd, self.allocator, &self.stdout, &self.stderr) catch {};
+            _ = runCmd(self, cmd) catch {};
         }
 
         self.allocator.free(self.peer);
         self.stderr.deinit(self.allocator);
         self.stdout.deinit(self.allocator);
     }
+
+    fn resetBuffers(self: *Veth) void {
+        self.stdout.clearRetainingCapacity();
+        self.stderr.clearRetainingCapacity();
+    }
+
+    fn runCmd(self: *Veth, cmd: []const []const u8) !u8 {
+        var child = Child.init(cmd, self.allocator);
+        child.stdout_behavior = .Pipe;
+        child.stderr_behavior = .Pipe;
+
+        try child.spawn();
+
+        try child.collectOutput(self.allocator, &self.stdout, &self.stderr, 1024);
+        const term = try child.wait();
+
+        return term.Exited;
+    }
 };
-
-fn runCmd(cmd: []const []const u8, allocator: std.mem.Allocator, stdout: *std.ArrayListUnmanaged(u8), stderr: *std.ArrayListUnmanaged(u8)) !u8 {
-    var child = Child.init(cmd, allocator);
-    child.stdout_behavior = .Pipe;
-    child.stderr_behavior = .Pipe;
-
-    try child.spawn();
-
-    try child.collectOutput(allocator, stdout, stderr, 1024);
-    const term = try child.wait();
-
-    return term.Exited;
-}
