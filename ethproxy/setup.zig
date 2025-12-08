@@ -32,6 +32,7 @@ pub const Veth = struct {
     name: []const u8,
     peer: []const u8,
     peer_mac: ?[6]u8 = null,
+    peer_ifindex: ?i32 = null,
 
     stdout: std.ArrayListUnmanaged(u8),
     stderr: std.ArrayListUnmanaged(u8),
@@ -70,11 +71,55 @@ pub const Veth = struct {
         }
     }
 
+    pub fn getPeerIfIndex(self: *Veth) !i32 {
+        if (self.peer_ifindex) |i| return i;
+
+        try self.updatePeerInfo();
+        return self.peer_ifindex orelse error.UpdatePeerInfoFailed;
+    }
+
     pub fn getPeerMac(self: *Veth) ![6]u8 {
-        if (self.peer_mac) |mac| {
-            return mac;
+        if (self.peer_mac) |mac| return mac;
+
+        try self.updatePeerInfo();
+        return self.peer_mac orelse error.UpdatePeerInfoFailed;
+    }
+
+    pub fn destroy(self: *Veth) void {
+        const cmds = .{
+            &[_][]const u8{ "ip", "link", "set", self.name, "down" },
+            &[_][]const u8{ "ip", "link", "set", self.peer, "down" },
+            &[_][]const u8{ "ip", "link", "del", self.name },
+        };
+
+        inline for (cmds) |cmd| {
+            _ = runCmd(self, cmd) catch {};
         }
 
+        self.allocator.free(self.peer);
+        self.stderr.deinit(self.allocator);
+        self.stdout.deinit(self.allocator);
+    }
+
+    fn resetBuffers(self: *Veth) void {
+        self.stdout.clearRetainingCapacity();
+        self.stderr.clearRetainingCapacity();
+    }
+
+    fn runCmd(self: *Veth, cmd: []const []const u8) !u8 {
+        var child = Child.init(cmd, self.allocator);
+        child.stdout_behavior = .Pipe;
+        child.stderr_behavior = .Pipe;
+
+        try child.spawn();
+
+        try child.collectOutput(self.allocator, &self.stdout, &self.stderr, 1024);
+        const term = try child.wait();
+
+        return term.Exited;
+    }
+
+    fn updatePeerInfo(self: *Veth) !void {
         self.resetBuffers();
         const cmd = &[_][]const u8{ "ip", "-j", "link", "show", self.peer };
         if (try self.runCmd(cmd) != 0) return error.CommandFailed;
@@ -110,40 +155,6 @@ pub const Veth = struct {
         try utils.stringToMac(peer_mac_str, &mac);
 
         self.peer_mac = mac;
-        return mac;
-    }
-
-    pub fn destroy(self: *Veth) void {
-        const cmds = .{
-            &[_][]const u8{ "ip", "link", "set", self.name, "down" },
-            &[_][]const u8{ "ip", "link", "set", self.peer, "down" },
-            &[_][]const u8{ "ip", "link", "del", self.name },
-        };
-
-        inline for (cmds) |cmd| {
-            _ = runCmd(self, cmd) catch {};
-        }
-
-        self.allocator.free(self.peer);
-        self.stderr.deinit(self.allocator);
-        self.stdout.deinit(self.allocator);
-    }
-
-    fn resetBuffers(self: *Veth) void {
-        self.stdout.clearRetainingCapacity();
-        self.stderr.clearRetainingCapacity();
-    }
-
-    fn runCmd(self: *Veth, cmd: []const []const u8) !u8 {
-        var child = Child.init(cmd, self.allocator);
-        child.stdout_behavior = .Pipe;
-        child.stderr_behavior = .Pipe;
-
-        try child.spawn();
-
-        try child.collectOutput(self.allocator, &self.stdout, &self.stderr, 1024);
-        const term = try child.wait();
-
-        return term.Exited;
+        self.peer_ifindex = parsed_output.value[0].ifindex;
     }
 };

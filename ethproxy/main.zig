@@ -7,6 +7,16 @@ const Params = params.Params;
 const Veth = @import("setup.zig").Veth;
 const utils = @import("utils.zig");
 
+// We are using a global variable to quit loop so handler
+// of sigint can set it. Not sure if it is the correct solution.
+// As it is global let's use an atomic one...
+var quit_loop = std.atomic.Value(bool).init(false);
+
+fn handleSigint(sig: c_int) callconv(.c) void {
+    _ = sig;
+    quit_loop.store(true, .release);
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
@@ -42,37 +52,9 @@ pub fn main() !void {
         return;
     };
 
-    const peer_mac = try veth.getPeerMac();
-    var peer_mac_buf: [17]u8 = undefined;
-    const peer_mac_str = try utils.macToString(&peer_mac, &peer_mac_buf);
-    std.debug.print("found peer mac : {s}\n", .{peer_mac_str});
-
     // At this point the network should be up and running.
-    simpleClient(&veth) catch |err| {
-        std.debug.print("Failed to run client: {}\n", .{err});
-    };
-}
-
-// We are using a global variable to quit loop so handler
-// of sigint can set it. Not sure if it is the correct solution.
-// As it is global let's use an atomic one...
-var quit_loop = std.atomic.Value(bool).init(false);
-
-fn handleSigint(sig: c_int) callconv(.c) void {
-    _ = sig;
-    quit_loop.store(true, .release);
-}
-
-fn simpleClient(veth: *Veth) !void {
-    // TODO: Currently veth is not used but we quicly open a socket to the
-    // peer to listen for incoming low level frame instead of waiting for
-    // user input.
-    _ = veth;
-
-    // At this point the network should be up and running.
-    // We will go to the infinite loop but before we need to
-    // setup a signal handler for Sigint to be able to quit properly
-    // and cleanup network.
+    // But before starting the proxy we need to setup a signal handler for Sigint
+    // to be able to quit properly and cleanup network.
     //   - man signal
     //   - man 7 signal
     const signalInterrupt = std.posix.Sigaction{
@@ -85,21 +67,64 @@ fn simpleClient(veth: *Veth) !void {
     std.posix.sigaction(std.posix.SIG.INT, &signalInterrupt, null);
     std.debug.print("You can quit using Ctrl-C\n", .{});
 
-    // man 7 unix
-    // -> We use AF_UNIX to communicate locally between processes
-    const sock = try posix.socket(posix.AF.UNIX, posix.SOCK.STREAM, 0);
+    runProxy(&veth) catch |err| {
+        std.debug.print("Failed to run client: {}\n", .{err});
+    };
+}
 
-    // Now we need to bind to local file: man 2 connect
+fn runProxy(veth: *Veth) !void {
+    // We are listening for incoming raw frame on peer interface and
+    // forwards them to the frameforge server.
+
+    // ----------------------------------------------------------------
+    // First listen on peer socket. It is a low level packet using
+    // raw network protocol.
+    // man 7 packet
+    const peer_sockfd = try posix.socket(posix.AF.PACKET, posix.SOCK.RAW, 0);
+    defer posix.close(peer_sockfd);
+
+    const peer_mac = try veth.getPeerMac();
+
+    const ssl_protocol = std.mem.nativeToBig(u16, std.os.linux.ETH.P.ALL);
+    const ssl_ifindex = try veth.getPeerIfIndex();
+    const ssl_hatype = 0;
+    const ssl_pkttype = std.os.linux.PACKET.BROADCAST;
+    const ssl_halen = peer_mac.len;
+    var ssl_addr = [_]u8{0} ** 8; // for sockaddr.ll addr is [8]u8
+    std.mem.copyForwards(u8, ssl_addr[0..], peer_mac[0..6]);
+
+    const peer_sockaddr: posix.sockaddr.ll = .{
+        .family = posix.AF.PACKET,
+        .protocol = ssl_protocol,
+        .ifindex = ssl_ifindex,
+        .hatype = ssl_hatype,
+        .pkttype = ssl_pkttype,
+        .halen = ssl_halen,
+        .addr = ssl_addr,
+    };
+
+    posix.bind(peer_sockfd, @ptrCast(&peer_sockaddr), @sizeOf(posix.sockaddr.ll)) catch |err| {
+        std.debug.print("Failed to bound endpoint: {s}\n", .{@errorName(err)});
+        return error.PeerBindFailed;
+    };
+
+    std.debug.print("Bound to interface {s}\n", .{veth.peer});
+
+    // ----------------------------------------------------------------
+    // Use local socket AF_UNIX to communicate with server
+    // man 7 unix
+    const local_sockfd = try posix.socket(posix.AF.UNIX, posix.SOCK.STREAM, 0);
+    defer posix.close(local_sockfd);
+
     var path: [108]u8 = [_]u8{0} ** 108;
     const path_str = "/tmp/frameforge.socket";
     std.mem.copyForwards(u8, &path, path_str);
 
-    const laddr: posix.sockaddr.un = .{
+    const local_sockaddr: posix.sockaddr.un = .{
         .family = posix.AF.UNIX,
         .path = path,
     };
-    try posix.connect(sock, @ptrCast(&laddr), @sizeOf(posix.sockaddr.un));
-    defer posix.close(sock);
+    try posix.connect(local_sockfd, @ptrCast(&local_sockaddr), @sizeOf(posix.sockaddr.un));
 
     var stdin_buffer: [64]u8 = undefined;
     var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
@@ -109,6 +134,16 @@ fn simpleClient(veth: *Veth) !void {
 
     std.debug.print("> ", .{}); // first prompt
 
+    // ----------------------------------------------------------------
+    // Finally the main loop, when something is received on peer, forward
+    // it to server... Quit when ctrl-c is pressed.
+    //
+    // TODO:
+    // After adding a veth peer socket, data can now arrive from two places:
+    //   - stdin (the user input FD)
+    //   - peer_sockfd (the veth peer)
+    // Need to select the correct source now.
+    //
     loop: while (!quit_loop.load(.acquire)) {
         // Ask to the user what to send. But as we can block we need to poll or timeout
         // so if the user hit ctrl-c we will be able to catch it. Otherwise we need to wait
@@ -134,12 +169,12 @@ fn simpleClient(veth: *Veth) !void {
         // the correct format.
         var header: [4]u8 = undefined; // will contain the size of the msg
         std.mem.writeInt(u32, &header, @intCast(msg.len), .little);
-        _ = try posix.send(sock, &header, 0);
-        _ = try posix.send(sock, msg, 0);
+        _ = try posix.send(local_sockfd, &header, 0);
+        _ = try posix.send(local_sockfd, msg, 0);
 
         // And wait for the response...
         var buf: [64]u8 = undefined;
-        const n = try posix.recv(sock, &buf, 0);
+        const n = try posix.recv(local_sockfd, &buf, 0);
 
         if (n < 4) {
             std.debug.print("We should at least received 4 bytes, received {d}\n", .{n});
