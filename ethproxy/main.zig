@@ -137,40 +137,47 @@ fn runProxy(veth: *Veth) !void {
     // ----------------------------------------------------------------
     // Finally the main loop, when something is received on peer, forward
     // it to server... Quit when ctrl-c is pressed.
-    //
-    // TODO:
-    // After adding a veth peer socket, data can now arrive from two places:
-    //   - stdin (the user input FD)
-    //   - peer_sockfd (the veth peer)
-    // Need to select the correct source now.
-    //
     loop: while (!quit_loop.load(.acquire)) {
         // Ask to the user what to send. But as we can block we need to poll or timeout
         // so if the user hit ctrl-c we will be able to catch it. Otherwise we need to wait
         // that something is entered to catch it.
-        var fds = [_]std.posix.pollfd{.{
-            .fd = std.posix.STDIN_FILENO,
-            .events = posix.POLL.IN,
-            .revents = 0,
-        }};
+        var fds = [_]std.posix.pollfd{
+            .{ .fd = std.posix.STDIN_FILENO, .events = posix.POLL.IN, .revents = 0 },
+            .{ .fd = peer_sockfd, .events = posix.POLL.IN, .revents = 0 },
+        };
 
         const ret = std.posix.poll(&fds, timeout_ms) catch continue :loop;
         if (ret == 0) continue :loop; // n == 0 means we hit the timeout
 
-        const msg = try stdin.takeDelimiterExclusive('\n');
-        // consume the '\n'
-        _ = try stdin.take(1);
+        // Is it something received from user
+        if (fds[0].revents & posix.POLL.IN != 0) {
+            const msg = try stdin.takeDelimiterExclusive('\n');
+            // consume the '\n'
+            _ = try stdin.take(1);
 
-        std.debug.print("READ <{s}>\n", .{msg});
+            std.debug.print("READ <{s}>\n", .{msg});
 
-        // We are using a simple protocol where we send the size of the data
-        // and then the data.
-        // We use an array of 4 bytes to be sure that it will be send using
-        // the correct format.
-        var header: [4]u8 = undefined; // will contain the size of the msg
-        std.mem.writeInt(u32, &header, @intCast(msg.len), .little);
-        _ = try posix.send(local_sockfd, &header, 0);
-        _ = try posix.send(local_sockfd, msg, 0);
+            // We are using a simple protocol where we send the size of the data
+            // and then the data.
+            // We use an array of 4 bytes to be sure that it will be send using
+            // the correct format.
+            var header: [4]u8 = undefined; // will contain the size of the msg
+            std.mem.writeInt(u32, &header, @intCast(msg.len), .little);
+            _ = try posix.send(local_sockfd, &header, 0);
+            _ = try posix.send(local_sockfd, msg, 0);
+        } else if (fds[1].revents & posix.POLL.IN != 0) {
+            var frame_buf: [1024]u8 = undefined;
+
+            const bytes = posix.read(peer_sockfd, frame_buf[0..]) catch |err| {
+                std.debug.print("Failed to read data from peer: {s}\n", .{@errorName(err)});
+                return error.PeerReadFailed;
+            };
+            std.debug.print("TODO: Received a frame of {d} bytes !!!\n", .{bytes});
+            continue :loop;
+        } else {
+            std.debug.print("WTF???\n", .{});
+            continue :loop;
+        }
 
         // And wait for the response...
         var buf: [64]u8 = undefined;
