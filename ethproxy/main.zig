@@ -149,49 +149,51 @@ fn runProxy(veth: *Veth) !void {
         const ret = std.posix.poll(&fds, timeout_ms) catch continue :loop;
         if (ret == 0) continue :loop; // n == 0 means we hit the timeout
 
-        // Is it something received from user
+        var frame_buf: [1600]u8 = undefined;
+        var msg: ?[]u8 = null;
+
         if (fds[0].revents & posix.POLL.IN != 0) {
-            const msg = try stdin.takeDelimiterExclusive('\n');
-            // consume the '\n'
-            _ = try stdin.take(1);
-
-            std.debug.print("READ <{s}>\n", .{msg});
-
-            // We are using a simple protocol where we send the size of the data
-            // and then the data.
-            // We use an array of 4 bytes to be sure that it will be send using
-            // the correct format.
-            var header: [4]u8 = undefined; // will contain the size of the msg
-            std.mem.writeInt(u32, &header, @intCast(msg.len), .little);
-            _ = try posix.send(local_sockfd, &header, 0);
-            _ = try posix.send(local_sockfd, msg, 0);
+            // ---- Read from user -----
+            msg = try stdin.takeDelimiterExclusive('\n');
+            _ = try stdin.take(1); // consume the '\n'
+            std.debug.print("READ <{s}>\n", .{msg.?});
         } else if (fds[1].revents & posix.POLL.IN != 0) {
-            var frame_buf: [1024]u8 = undefined;
-
+            // ---- Read from peer socket -----
             const bytes = posix.read(peer_sockfd, frame_buf[0..]) catch |err| {
                 std.debug.print("Failed to read data from peer: {s}\n", .{@errorName(err)});
                 return error.PeerReadFailed;
             };
             std.debug.print("TODO: Received a frame of {d} bytes !!!\n", .{bytes});
-            continue :loop;
+            msg = frame_buf[0..bytes];
         } else {
             std.debug.print("WTF???\n", .{});
             continue :loop;
         }
 
-        // And wait for the response...
-        var buf: [64]u8 = undefined;
-        const n = try posix.recv(local_sockfd, &buf, 0);
+        // We are using a simple protocol where we send the size of the data
+        // and then the data.
+        // We use an array of 4 bytes to be sure that it will be send using
+        // the correct format.
+        if (msg) |m| {
+            var header: [4]u8 = undefined; // will contain the size of m
+            std.mem.writeInt(u32, &header, @intCast(m.len), .little);
+            _ = try posix.send(local_sockfd, &header, 0);
+            _ = try posix.send(local_sockfd, m, 0);
 
-        if (n < 4) {
-            std.debug.print("We should at least received 4 bytes, received {d}\n", .{n});
-            continue :loop;
+            // And wait for the response...
+            var buf: [64]u8 = undefined;
+            const n = try posix.recv(local_sockfd, &buf, 0);
+
+            if (n < 4) {
+                std.debug.print("We should at least received 4 bytes, received {d}\n", .{n});
+                continue :loop;
+            }
+
+            // The first four bytes are the size and then the data
+            const data_len: u32 = std.mem.readInt(u32, buf[0..4], .little);
+            std.debug.print("ETHPROXY: Data size: {d} \n", .{data_len});
+            std.debug.print("ETHPROXY: Payload  : {s}\n", .{buf[4 .. 4 + data_len]});
         }
-
-        // The first four bytes are the size and then the data
-        const data_len: u32 = std.mem.readInt(u32, buf[0..4], .little);
-        std.debug.print("ETHPROXY: Data size: {d} \n", .{data_len});
-        std.debug.print("ETHPROXY: Payload  : {s}\n", .{buf[4 .. 4 + data_len]});
 
         std.debug.print("> ", .{});
     }
