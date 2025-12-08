@@ -41,6 +41,8 @@ pub fn main() !void {
         return;
     };
 
+    _ = try veth.getPeerMac();
+
     // At this point the network should be up and running.
     simpleClient(&veth) catch |err| {
         std.debug.print("Failed to run client: {}\n", .{err});

@@ -6,10 +6,30 @@ const Child = std.process.Child;
 // - `ip link add <p1-name> type veth peer name <p2-name>`
 // To run external command: https://cookbook.ziglang.cc/08-02-external/
 
+// This is used to read the output from "ip -j link show ..."
+const VethJsonIface = struct {
+    ifindex: i32,
+    ifname: []const u8,
+    flags: []const []const u8,
+    mtu: i32,
+    qdisc: []const u8,
+    operstate: []const u8,
+    linkmode: []const u8,
+    group: []const u8,
+    link_type: []const u8,
+    link: ?[]const u8 = null,
+    master: ?[]const u8 = null,
+    txqlen: ?i32 = null,
+    address: ?[]const u8 = null,
+    broadcast: ?[]const u8 = null,
+    altnames: ?[]const []const u8 = null,
+};
+
 pub const Veth = struct {
     allocator: std.mem.Allocator,
     name: []const u8,
     peer: []const u8,
+    peer_mac: ?[6]u8 = null,
 
     stdout: std.ArrayListUnmanaged(u8),
     stderr: std.ArrayListUnmanaged(u8),
@@ -48,9 +68,25 @@ pub const Veth = struct {
         }
     }
 
-    pub fn getPeerMac(self: *Veth) void {
-        // TODO
-        _ = self;
+    pub fn getPeerMac(self: *Veth) ![6]u8 {
+        if (self.peer_mac) |mac| {
+            return mac;
+        }
+
+        self.resetBuffers();
+        const cmd = &[_][]const u8{ "ip", "-j", "link", "show", self.peer };
+        _ = try self.runCmd(cmd);
+
+        // We need to pase the JSON output
+        const json_str = self.stdout.items;
+        const parser = try std.json.parseFromSlice([]VethJsonIface, self.allocator, json_str, .{
+            .ignore_unknown_fields = true,
+        });
+        defer parser.deinit();
+
+        std.debug.print("TODO: extract the real value from sting:\n{s}\n", .{json_str});
+        const fake_mac = [6]u8{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+        return fake_mac;
     }
 
     pub fn destroy(self: *Veth) void {
