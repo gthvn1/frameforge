@@ -18,6 +18,20 @@ together with a Zig client handling low-level packet I/O.**
   * Print the response.
 * See the screenshot for a better idea of the current status.
 
+## Debug
+
+- Start the server
+- Modified the client to connect to /tmp/frameforge-proxy.socket
+- Create a proxy with socat
+```
+socat -v UNIX-LISTEN:/tmp/frameforge-proxy.socket,fork \
+         UNIX-CONNECT:/tmp/frameforge.socket  \
+  | tee /tmp/frameforge.log
+```
+- We are able to see messages that are exchanged
+- We will able to see the issue where data size is too big on the ethproxy
+  side.
+
 ## TODO / Next Steps
 
 * [x] Exchange data between `frameforge` and `ethproxy`

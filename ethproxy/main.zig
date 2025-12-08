@@ -117,7 +117,7 @@ fn runProxy(veth: *Veth) !void {
     defer posix.close(local_sockfd);
 
     var path: [108]u8 = [_]u8{0} ** 108;
-    const path_str = "/tmp/frameforge.socket";
+    const path_str = "/tmp/frameforge-proxy.socket";
     std.mem.copyForwards(u8, &path, path_str);
 
     const local_sockaddr: posix.sockaddr.un = .{

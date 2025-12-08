@@ -18,7 +18,7 @@ let encode_header size : bytes =
   set header 3 (Char.chr ((size lsr 24) land 0xff)) ;
   header
 
-let run ?(run_once = false) socket_path (handler : handler) =
+let run socket_path (handler : handler) =
   (* Add the signal handler to cleanly shutdown the server *)
   Sys.(set_signal sigint (Signal_handle (fun _ -> ()))) ;
 
@@ -63,7 +63,6 @@ let run ?(run_once = false) socket_path (handler : handler) =
               "FRAMEFORGE: client disconnected before reading payload\n%!" ;
             ()
         | _ ->
-            Printf.printf "FRAMEFORGE: Payload  : %s\n" (Bytes.to_string payload) ;
             (* --- Call the handler *)
             let response = handler payload in
 
@@ -79,19 +78,20 @@ let run ?(run_once = false) socket_path (handler : handler) =
   let rec accept_loop () =
     try
       let fd, _ = accept sock in
-      Printf.printf "Client connected\n%!" ;
+      Printf.printf "FRAMEFORGE: Client connected\n%!" ;
       handle_client fd ;
       close fd ;
-      if not run_once then accept_loop ()
+      Printf.printf "FRAMEFORGE: client disconnected\n%!" ;
+      accept_loop ()
     with
     | Unix_error (EINTR, _, _) ->
         (* The handler does nothing but allow us to reach this point that is why it is required.
            Without the signal handler we just quit directly.*)
-        print_endline "Server ends cleanly"
+        print_endline "FRAMEFORGE: Server ends cleanly"
     | exn ->
-        Printf.printf "Got error: %s\n%!" (Printexc.to_string exn)
+        Printf.printf "FRAMEFORGE: Got error: %s\n%!" (Printexc.to_string exn)
   in
 
   accept_loop () ;
   close sock ;
-  Printf.printf "Connection closed\n%!"
+  Printf.printf "FRAMEFORGE: Connection closed\n%!"
