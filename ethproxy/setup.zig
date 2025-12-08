@@ -1,6 +1,8 @@
 const std = @import("std");
 const Child = std.process.Child;
 
+const utils = @import("utils.zig");
+
 // man 4 veth
 // To create veth devices we just need to do
 // - `ip link add <p1-name> type veth peer name <p2-name>`
@@ -75,18 +77,40 @@ pub const Veth = struct {
 
         self.resetBuffers();
         const cmd = &[_][]const u8{ "ip", "-j", "link", "show", self.peer };
-        _ = try self.runCmd(cmd);
+        if (try self.runCmd(cmd) != 0) return error.CommandFailed;
 
-        // We need to pase the JSON output
+        // We need to parse the JSON output. We are expecting:
+        // [{"ifindex":18,
+        //   "link":"toto",
+        //   "ifname":"toto-peer",
+        //   "flags":["BROADCAST","MULTICAST","UP","LOWER_UP"],
+        //   "mtu":1500,
+        //   "qdisc":"noqueue",
+        //   "operstate":"UP",
+        //   "linkmode":"DEFAULT",
+        //   "group":"default",
+        //   "txqlen":1000,
+        //   "link_type":"ether",
+        //   "address":"be:ef:0f:ce:76:0b",
+        //   "broadcast":"ff:ff:ff:ff:ff:ff"}]
         const json_str = self.stdout.items;
-        const parser = try std.json.parseFromSlice([]VethJsonIface, self.allocator, json_str, .{
+        const parsed_output = try std.json.parseFromSlice([]VethJsonIface, self.allocator, json_str, .{
             .ignore_unknown_fields = true,
         });
-        defer parser.deinit();
+        defer parsed_output.deinit();
 
-        std.debug.print("TODO: extract the real value from sting:\n{s}\n", .{json_str});
-        const fake_mac = [6]u8{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        return fake_mac;
+        // We are expecting only one device
+        const peer_mac_str = switch (parsed_output.value.len) {
+            0 => return error.DeviceNotFound,
+            1 => parsed_output.value[0].address.?,
+            else => return error.MultipleDeviceFound,
+        };
+
+        var mac: [6]u8 = undefined;
+        try utils.stringToMac(peer_mac_str, &mac);
+
+        self.peer_mac = mac;
+        return mac;
     }
 
     pub fn destroy(self: *Veth) void {

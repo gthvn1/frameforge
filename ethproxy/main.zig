@@ -5,6 +5,7 @@ const params = @import("params.zig");
 const Params = params.Params;
 
 const Veth = @import("setup.zig").Veth;
+const utils = @import("utils.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -41,7 +42,10 @@ pub fn main() !void {
         return;
     };
 
-    _ = try veth.getPeerMac();
+    const peer_mac = try veth.getPeerMac();
+    var peer_mac_buf: [17]u8 = undefined;
+    const peer_mac_str = try utils.macToString(&peer_mac, &peer_mac_buf);
+    std.debug.print("found peer mac : {s}\n", .{peer_mac_str});
 
     // At this point the network should be up and running.
     simpleClient(&veth) catch |err| {
