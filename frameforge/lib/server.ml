@@ -26,7 +26,7 @@ let rec read_exact fd buf offset len =
     | 0 -> 0
     | n -> read_exact fd buf (offset + n) (len - n)
 
-(** handle one client connection  *)
+(** handle one client connection *)
 let handle_client fd handler =
   let rec aux () =
     (* --- Read the first 4 bytes first to get the size *)
