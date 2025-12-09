@@ -1,4 +1,7 @@
+let hex_of_bytes(b: bytes) : string =
+  let _ = b in
+  "TODO: print bytes as hex string"
+
 let handle (payload : bytes) : bytes =
-  let payload_size = Bytes.length payload in
-  Printf.printf "FRAMEFORGE: payload size %d\n" payload_size ;
+  Printf.printf "%s\n" (hex_of_bytes payload);
   Bytes.of_string "TODO: parse ethernet frame\n"
