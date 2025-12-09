@@ -117,7 +117,7 @@ fn runProxy(veth: *Veth) !void {
     defer posix.close(local_sockfd);
 
     var path: [108]u8 = [_]u8{0} ** 108;
-    const path_str = "/tmp/frameforge-proxy.socket";
+    const path_str = "/tmp/frameforge.socket";
     std.mem.copyForwards(u8, &path, path_str);
 
     const local_sockaddr: posix.sockaddr.un = .{
@@ -159,6 +159,8 @@ fn runProxy(veth: *Veth) !void {
             std.debug.print("READ <{s}>\n", .{msg.?});
         } else if (fds[1].revents & posix.POLL.IN != 0) {
             // ---- Read from peer socket -----
+            // NOTE: we assume here that Linux returns a whole packet because we are
+            //       using AF_PACKET, SOCK_RAW.
             const bytes = posix.read(peer_sockfd, frame_buf[0..]) catch |err| {
                 std.debug.print("Failed to read data from peer: {s}\n", .{@errorName(err)});
                 return error.PeerReadFailed;
@@ -172,31 +174,40 @@ fn runProxy(veth: *Veth) !void {
 
         // We are using a simple protocol where we send the size of the data
         // and then the data.
-        // We use an array of 4 bytes to be sure that it will be send using
-        // the correct format.
         if (msg) |m| {
             var header: [4]u8 = undefined; // will contain the size of m
             std.mem.writeInt(u32, &header, @intCast(m.len), .little);
             _ = try posix.send(local_sockfd, &header, 0);
             _ = try posix.send(local_sockfd, m, 0);
 
-            // And wait for the response...
-            var buf: [64]u8 = undefined;
-            const n = try posix.recv(local_sockfd, &buf, 0);
+            // We need to read the exact number of bytes otherwise we will be desynchrnized
+            // and most probably crashed the client.
+            // So first get the size of the payload
+            try readExact(local_sockfd, &header);
+            const payload_len = std.mem.readInt(u32, header[0..4], .little);
+            std.debug.print("ETHPROXY: Data size: {d} \n", .{payload_len});
 
-            if (n < 4) {
-                std.debug.print("We should at least received 4 bytes, received {d}\n", .{n});
-                continue :loop;
-            }
+            // Now we need to read exactly the payload
+            const payload = try std.heap.page_allocator.alloc(u8, payload_len);
+            defer std.heap.page_allocator.free(payload);
 
-            // The first four bytes are the size and then the data
-            const data_len: u32 = std.mem.readInt(u32, buf[0..4], .little);
-            std.debug.print("ETHPROXY: Data size: {d} \n", .{data_len});
-            std.debug.print("ETHPROXY: Payload  : {s}\n", .{buf[4 .. 4 + data_len]});
+            try readExact(local_sockfd, payload);
+            std.debug.print("ETHPROXY: Payload  : {s}\n", .{payload});
         }
 
         std.debug.print("> ", .{});
     }
 
     std.debug.print("Break out of the loop cleanly\n", .{});
+}
+
+// Reads bytes until buffer is filled
+fn readExact(fd: posix.fd_t, buf: []u8) !void {
+    var off: usize = 0;
+
+    while (off < buf.len) {
+        const n = try posix.recv(fd, buf[off..], 0);
+        if (n == 0) return error.ConnectionClosed;
+        off += n;
+    }
 }
