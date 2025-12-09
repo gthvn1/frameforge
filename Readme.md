@@ -24,8 +24,8 @@ together with a Zig client handling low-level packet I/O.**
 - Modified the client to connect to /tmp/frameforge-proxy.socket
 - Create a proxy with socat
 ```
-socat -v UNIX-LISTEN:/tmp/frameforge-proxy.socket,fork \
-         UNIX-CONNECT:/tmp/frameforge.socket  \
+socat -v UNIX-LISTEN:/tmp/frameforge-proxy.sock,fork \
+         UNIX-CONNECT:/tmp/frameforge.sock \
   | tee /tmp/frameforge.log
 ```
 - We are able to see messages that are exchanged
@@ -36,7 +36,7 @@ socat -v UNIX-LISTEN:/tmp/frameforge-proxy.socket,fork \
 
 * [x] Exchange data between `frameforge` and `ethproxy`
   - [x] Create the frameforge server:
-    - Can be tested using `echo "ping" | nc -U /tmp/frameforge.socket`
+    - Can be tested using `echo "ping" | nc -U /tmp/frameforge.sock`
   - [x] Create the ethproxy client
 * [x] Ethproxy: Setup the network (veth)
 * [ ] Ethproxy: Read an ethernet frame from veth-peer and send it to the server

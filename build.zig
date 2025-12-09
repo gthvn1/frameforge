@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) !void {
     // ----- Add a run step
     // we want to:
     //   - start the server
-    //   - wait that socket /tmp/frameforge.socket is ready
+    //   - wait that socket /tmp/frameforge.sock is ready
     //   - start the client
     const run_step = b.step("run", "Run frameforge and zclient");
 
@@ -44,10 +44,10 @@ pub fn build(b: *std.Build) !void {
         \\ ./frameforge/_build/default/bin/main.exe --test --pong &
         \\ echo "Waiting for server to be ready"
         \\ for i in $(seq 1 50); do
-        \\   [ -S /tmp/frameforge.socket ] && exit 0
+        \\   [ -S /tmp/frameforge.sock ] && exit 0
         \\   sleep 0.1
         \\ done
-        \\ echo "Failed to get /tmp/frameforge.socket ready; timed out."
+        \\ echo "Failed to get /tmp/frameforge.sock ready; timed out."
         \\ exit 1
         ,
     });

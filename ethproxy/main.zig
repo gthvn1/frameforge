@@ -31,8 +31,6 @@ pub fn main() !void {
     const client_args = Params.parse(&args_iter) catch |err| {
         switch (err) {
             Params.Error.InvalidCIDR => std.debug.print("Invalid CIDR\n", .{}),
-            Params.Error.MissingCIDR => std.debug.print("CIDR is missing\n", .{}),
-            Params.Error.MissingVethName => std.debug.print("Veth name is missing\n", .{}),
         }
 
         params.usage(progname);
@@ -67,12 +65,12 @@ pub fn main() !void {
     std.posix.sigaction(std.posix.SIG.INT, &signalInterrupt, null);
     std.debug.print("You can quit using Ctrl-C\n", .{});
 
-    runProxy(&veth) catch |err| {
+    runProxy(&veth, client_args.unix_socket) catch |err| {
         std.debug.print("Failed to run client: {}\n", .{err});
     };
 }
 
-fn runProxy(veth: *Veth) !void {
+fn runProxy(veth: *Veth, unix_socket_path: [:0]const u8) !void {
     // We are listening for incoming raw frame on peer interface and
     // forwards them to the frameforge server.
 
@@ -117,8 +115,7 @@ fn runProxy(veth: *Veth) !void {
     defer posix.close(local_sockfd);
 
     var path: [108]u8 = [_]u8{0} ** 108;
-    const path_str = "/tmp/frameforge.socket";
-    std.mem.copyForwards(u8, &path, path_str);
+    std.mem.copyForwards(u8, &path, unix_socket_path);
 
     const local_sockaddr: posix.sockaddr.un = .{
         .family = posix.AF.UNIX,
