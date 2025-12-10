@@ -39,9 +39,11 @@ socat -v UNIX-LISTEN:/tmp/frameforge-proxy.sock,fork \
     - Can be tested using `echo "ping" | nc -U /tmp/frameforge.sock`
   - [x] Create the ethproxy client
 * [x] Ethproxy: Setup the network (veth)
-* [ ] Ethproxy: Read an ethernet frame from veth-peer and send it to the server
+* [x] Ethproxy: Read an ethernet frame from veth-peer and send it to the server
 * [ ] Frameforge: Parse Ethernet Frame
-* [ ] ...
+  * [ ] Parse the ethertype
+  * [ ] handle arping
+  * [ ] ...
 
 ## Usage
 
