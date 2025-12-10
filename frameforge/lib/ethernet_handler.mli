@@ -1,0 +1,2 @@
+val handle: bytes -> bytes
+
